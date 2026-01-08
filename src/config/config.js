@@ -215,12 +215,50 @@ export function getProxyConfig() {
   return systemProxy || null;
 }
 
+// 默认 API 配置
+const DEFAULT_API_CONFIGS = {
+  sandbox: {
+    url: 'https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:streamGenerateContent?alt=sse',
+    modelsUrl: 'https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:fetchAvailableModels',
+    noStreamUrl: 'https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:generateContent',
+    host: 'daily-cloudcode-pa.sandbox.googleapis.com'
+  },
+  production: {
+    url: 'https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse',
+    modelsUrl: 'https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels',
+    noStreamUrl: 'https://daily-cloudcode-pa.googleapis.com/v1internal:generateContent',
+    host: 'daily-cloudcode-pa.googleapis.com'
+  }
+};
+
+/**
+ * 获取当前使用的 API 配置
+ * @param {Object} jsonConfig - JSON 配置对象
+ * @returns {Object} 当前 API 配置
+ */
+function getActiveApiConfig(jsonConfig) {
+  const apiUse = jsonConfig.api?.use || 'sandbox';
+  const customConfig = jsonConfig.api?.[apiUse];
+  const defaultConfig = DEFAULT_API_CONFIGS[apiUse] || DEFAULT_API_CONFIGS.sandbox;
+  
+  return {
+    use: apiUse,
+    url: customConfig?.url || defaultConfig.url,
+    modelsUrl: customConfig?.modelsUrl || defaultConfig.modelsUrl,
+    noStreamUrl: customConfig?.noStreamUrl || defaultConfig.noStreamUrl,
+    host: customConfig?.host || defaultConfig.host,
+    userAgent: jsonConfig.api?.userAgent || 'antigravity/1.13.3 windows/amd64'
+  };
+}
+
 /**
  * 从 JSON 和环境变量构建配置对象
  * @param {Object} jsonConfig - JSON 配置对象
  * @returns {Object} 完整配置对象
  */
 export function buildConfig(jsonConfig) {
+  const apiConfig = getActiveApiConfig(jsonConfig);
+  
   return {
     server: {
       port: jsonConfig.server?.port || DEFAULT_SERVER_PORT,
@@ -238,13 +276,7 @@ export function buildConfig(jsonConfig) {
     },
     imageBaseUrl: process.env.IMAGE_BASE_URL || null,
     maxImages: jsonConfig.other?.maxImages || DEFAULT_MAX_IMAGES,
-    api: {
-      url: jsonConfig.api?.url || 'https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:streamGenerateContent?alt=sse',
-      modelsUrl: jsonConfig.api?.modelsUrl || 'https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:fetchAvailableModels',
-      noStreamUrl: jsonConfig.api?.noStreamUrl || 'https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:generateContent',
-      host: jsonConfig.api?.host || 'daily-cloudcode-pa.sandbox.googleapis.com',
-      userAgent: jsonConfig.api?.userAgent || 'antigravity/1.13.3 windows/amd64'
-    },
+    api: apiConfig,
     defaults: {
       temperature: jsonConfig.defaults?.temperature ?? DEFAULT_GENERATION_PARAMS.temperature,
       top_p: jsonConfig.defaults?.topP ?? DEFAULT_GENERATION_PARAMS.top_p,
@@ -258,6 +290,7 @@ export function buildConfig(jsonConfig) {
     },
     admin: getAdminCredentials(),
     useNativeAxios: jsonConfig.other?.useNativeAxios !== false,
+    forceIPv4: jsonConfig.other?.forceIPv4 === true,
     timeout: jsonConfig.other?.timeout || DEFAULT_TIMEOUT,
     retryTimes: Number.isFinite(jsonConfig.other?.retryTimes) ? jsonConfig.other.retryTimes : DEFAULT_RETRY_TIMES,
     proxy: getProxyConfig(),
