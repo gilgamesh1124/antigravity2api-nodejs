@@ -1,20 +1,22 @@
 import tokenManager from '../auth/token_manager.js';
 import config from '../config/config.js';
-import fingerprintRequester from '../requester.js';
+import AntigravityRequester from '../AntigravityRequester.js';
 import { saveBase64Image } from '../utils/imageStorage.js';
 import logger from '../utils/logger.js';
 import memoryManager from '../utils/memoryManager.js';
 import { httpRequest, httpStreamRequest } from '../utils/httpClient.js';
 import { MODEL_LIST_CACHE_TTL } from '../constants/index.js';
 import { createApiError } from '../utils/errors.js';
+import fs from 'fs/promises';
+import fsSync from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import {
   convertToToolCall,
   registerStreamMemoryCleanup
 } from './stream_parser.js';
 import { setSignature, shouldCacheSignature, isImageModel } from '../utils/thoughtSignatureCache.js';
 import {
+  DEBUG_DUMP_FILE,
   isDebugDumpEnabled,
   createDumpId,
   createStreamCollector,
@@ -28,9 +30,7 @@ import { createStreamLineProcessor } from './streamLineProcessor.js';
 import { runAxiosSseStream, runNativeSseStream, postJsonAndParse } from './geminiTransport.js';
 import { parseGeminiCandidateParts, toOpenAIUsage } from './geminiResponseParser.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-// 请求客户端：优先使用 FingerprintRequester，失败则自动降级到 axios
+// 请求客户端：优先使用 AntigravityRequester，失败则自动降级到 axios
 let requester = null;
 let useAxios = false;
 
@@ -40,16 +40,9 @@ if (config.useNativeAxios === true) {
   logger.info('使用原生 axios 请求');
 } else {
   try {
-    // 使用 src/bin/config.json 作为 TLS 指纹配置文件
-    const configPath = path.join(__dirname, '..', 'bin', 'tls_config.json');
-    requester = fingerprintRequester.create({
-      configPath,
-      timeout: config.timeout ? Math.ceil(config.timeout / 1000) : 30,
-      proxy: config.proxy || null,
-    });
-    logger.info('使用 FingerprintRequester 请求');
+    requester = new AntigravityRequester();
   } catch (error) {
-    logger.warn('FingerprintRequester 初始化失败，自动降级使用 axios:', error.message);
+    logger.warn('AntigravityRequester 初始化失败，自动降级使用 axios:', error.message);
     useAxios = true;
   }
 }
